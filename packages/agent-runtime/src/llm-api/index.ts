@@ -15,14 +15,17 @@ export { promptRelaceAI } from './relace-api'
 // Codebuff Web API
 export {
   callTokenCountAPI,
-  getBaseUrlIfCliEnv,
+  callWebSearchAPI,
+  callDocsSearchAPI,
 } from './codebuff-web-api'
 
 // Context7 API
+export type { SearchResponse, SearchResult } from './context7-api'
 export {
-  callContext7Api,
-  callContext7ResolveApi,
+  searchLibraries,
+  fetchContext7LibraryDocumentation,
 } from './context7-api'
 
 // Linkup API
-export { callLinkupAPI } from './linkup-api'
+export type { LinkupEnv, LinkupSearchResult, LinkupSearchResponse } from './linkup-api'
+export { searchWeb } from './linkup-api'
