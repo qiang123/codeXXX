@@ -1,18 +1,16 @@
-import { endsAgentStepParam } from '@codebuff/common/tools/constants'
-import { toolParams } from '@codebuff/common/tools/list'
 import { generateCompactId } from '@codebuff/common/util/string'
 import { cloneDeep } from 'lodash'
 
 import { getMCPToolData } from '../mcp'
-import { getAgentShortName } from '../templates/prompts'
 import { codebuffToolHandlers } from './handlers/list'
-import { ensureZodSchema } from './prompts'
+import {
+  parseRawToolCall as parseRawToolCallImpl,
+  parseRawCustomToolCall as parseRawCustomToolCallImpl,
+  tryTransformAgentToolCall as tryTransformAgentToolCallImpl,
+} from './parsers'
 
-import type { AgentTemplateType } from '@codebuff/common/types/session-state'
-
-import type { AgentTemplate } from '../templates/types'
+import type { CustomToolCall, ToolCallError, ExecuteToolCallParams } from './types'
 import type { CodebuffToolHandlerFunction } from './handlers/handler-function-type'
-import type { FileProcessingState } from './handlers/tool/write-file'
 import type { ToolName } from '@codebuff/common/tools/constants'
 import type {
   ClientToolCall,
@@ -20,111 +18,16 @@ import type {
   CodebuffToolCall,
   CodebuffToolOutput,
 } from '@codebuff/common/tools/list'
-import type {
-  AgentRuntimeDeps,
-  AgentRuntimeScopedDeps,
-} from '@codebuff/common/types/contracts/agent-runtime'
-import type { Logger } from '@codebuff/common/types/contracts/logger'
 import type { ToolMessage } from '@codebuff/common/types/messages/codebuff-message'
 import type { ToolResultOutput } from '@codebuff/common/types/messages/content-part'
-import type { PrintModeEvent } from '@codebuff/common/types/print-mode'
-import type { AgentState, Subgoal } from '@codebuff/common/types/session-state'
-import type {
-  CustomToolDefinitions,
-  ProjectFileContext,
-} from '@codebuff/common/util/file'
-import type { ToolCallPart, ToolSet } from 'ai'
 
-export type CustomToolCall = {
-  toolName: string
-  input: Record<string, unknown>
-} & Omit<ToolCallPart, 'type'>
+// Re-export types for backward compatibility
+export type { CustomToolCall, ToolCallError, ExecuteToolCallParams } from './types'
 
-export type ToolCallError = {
-  toolName?: string
-  input: Record<string, unknown>
-  error: string
-} & Pick<CodebuffToolCall, 'toolCallId'>
-
-export function parseRawToolCall<T extends ToolName = ToolName>(params: {
-  rawToolCall: {
-    toolName: T
-    toolCallId: string
-    input: Record<string, unknown>
-  }
-}): CodebuffToolCall<T> | ToolCallError {
-  const { rawToolCall } = params
-  const toolName = rawToolCall.toolName
-
-  const processedParameters = rawToolCall.input
-  const paramsSchema = toolParams[toolName].inputSchema
-
-  const result = paramsSchema.safeParse(processedParameters)
-
-  if (!result.success) {
-    return {
-      toolName,
-      toolCallId: rawToolCall.toolCallId,
-      input: rawToolCall.input,
-      error: `Invalid parameters for ${toolName}: ${JSON.stringify(
-        result.error.issues,
-        null,
-        2,
-      )}`,
-    }
-  }
-
-  if (endsAgentStepParam in result.data) {
-    delete result.data[endsAgentStepParam]
-  }
-
-  return {
-    toolName,
-    input: result.data,
-    toolCallId: rawToolCall.toolCallId,
-  } as CodebuffToolCall<T>
-}
-
-export type ExecuteToolCallParams<T extends string = ToolName> = {
-  toolName: T
-  input: Record<string, unknown>
-  autoInsertEndStepParam?: boolean
-  excludeToolFromMessageHistory?: boolean
-
-  agentContext: Record<string, Subgoal>
-  agentState: AgentState
-  agentStepId: string
-  ancestorRunIds: string[]
-  agentTemplate: AgentTemplate
-  clientSessionId: string
-  fileContext: ProjectFileContext
-  fileProcessingState: FileProcessingState
-  fingerprintId: string
-  fromHandleSteps?: boolean
-  fullResponse: string
-  localAgentTemplates: Record<string, AgentTemplate>
-  logger: Logger
-  previousToolCallFinished: Promise<void>
-  prompt: string | undefined
-  repoId: string | undefined
-  repoUrl: string | undefined
-  runId: string
-  signal: AbortSignal
-  system: string
-  tools: ToolSet
-  toolCallId: string | undefined
-  toolCalls: (CodebuffToolCall | CustomToolCall)[]
-  toolResults: ToolMessage[]
-  toolResultsToAddAfterStream: ToolMessage[]
-  skipDirectResultPush?: boolean
-  userId: string | undefined
-  userInputId: string
-
-  fetch: typeof globalThis.fetch
-  onCostCalculated: (credits: number) => Promise<void>
-  onResponseChunk: (chunk: string | PrintModeEvent) => void
-} & AgentRuntimeDeps &
-  AgentRuntimeScopedDeps
+// Re-export parsing functions for backward compatibility
+export const parseRawToolCall = parseRawToolCallImpl
+export const parseRawCustomToolCall = parseRawCustomToolCallImpl
+export const tryTransformAgentToolCall = tryTransformAgentToolCallImpl
 
 export function executeToolCall<T extends ToolName>(
   params: ExecuteToolCallParams<T>,
@@ -258,71 +161,6 @@ export function executeToolCall<T extends ToolName>(
       )
     }
   })
-}
-
-export function parseRawCustomToolCall(params: {
-  customToolDefs: CustomToolDefinitions
-  rawToolCall: {
-    toolName: string
-    toolCallId: string
-    input: Record<string, unknown>
-  }
-  autoInsertEndStepParam?: boolean
-}): CustomToolCall | ToolCallError {
-  const { customToolDefs, rawToolCall, autoInsertEndStepParam = false } = params
-  const toolName = rawToolCall.toolName
-
-  if (
-    !(customToolDefs && toolName in customToolDefs) &&
-    !toolName.includes('/')
-  ) {
-    return {
-      toolName,
-      toolCallId: rawToolCall.toolCallId,
-      input: rawToolCall.input,
-      error: `Tool ${toolName} not found`,
-    }
-  }
-
-  const processedParameters: Record<string, any> = {}
-  for (const [param, val] of Object.entries(rawToolCall.input ?? {})) {
-    processedParameters[param] = val
-  }
-
-  // Add the required codebuff_end_step parameter with the correct value for this tool if requested
-  if (autoInsertEndStepParam) {
-    processedParameters[endsAgentStepParam] =
-      customToolDefs?.[toolName]?.endsAgentStep
-  }
-
-  const rawSchema = customToolDefs?.[toolName]?.inputSchema
-  if (rawSchema) {
-    const paramsSchema = ensureZodSchema(rawSchema)
-    const result = paramsSchema.safeParse(processedParameters)
-
-    if (!result.success) {
-      return {
-        toolName: toolName,
-        toolCallId: rawToolCall.toolCallId,
-        input: rawToolCall.input,
-        error: `Invalid parameters for ${toolName}: ${JSON.stringify(
-          result.error.issues,
-          null,
-          2,
-        )}`,
-      }
-    }
-  }
-
-  const input = JSON.parse(JSON.stringify(rawToolCall.input))
-  if (endsAgentStepParam in input) {
-    delete input[endsAgentStepParam]
-  }
-  return {
-    toolName: toolName,
-    input,
-    toolCallId: rawToolCall.toolCallId,
-  }
 }
 
 export async function executeCustomToolCall(
@@ -462,41 +300,4 @@ export async function executeCustomToolCall(
     })
 }
 
-/**
- * Checks if a tool name matches a spawnable agent and returns the transformed
- * spawn_agents input if so. Returns null if not an agent tool call.
- */
-export function tryTransformAgentToolCall(params: {
-  toolName: string
-  input: Record<string, unknown>
-  spawnableAgents: AgentTemplateType[]
-}): { toolName: 'spawn_agents'; input: Record<string, unknown> } | null {
-  const { toolName, input, spawnableAgents } = params
 
-  const agentShortNames = spawnableAgents.map(getAgentShortName)
-  if (!agentShortNames.includes(toolName)) {
-    return null
-  }
-
-  // Find the full agent type for this short name
-  const fullAgentType = spawnableAgents.find(
-    (agentType) => getAgentShortName(agentType) === toolName,
-  )
-
-  // Convert to spawn_agents call - input already has prompt and params as top-level fields
-  // (consistent with spawn_agents schema)
-  const agentEntry: Record<string, unknown> = {
-    agent_type: fullAgentType || toolName,
-  }
-  if (typeof input.prompt === 'string') {
-    agentEntry.prompt = input.prompt
-  }
-  if (input.params && typeof input.params === 'object') {
-    agentEntry.params = input.params
-  }
-  const spawnAgentsInput = {
-    agents: [agentEntry],
-  }
-
-  return { toolName: 'spawn_agents', input: spawnAgentsInput }
-}
