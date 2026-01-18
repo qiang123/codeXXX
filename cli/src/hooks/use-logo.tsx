@@ -46,7 +46,7 @@ interface LogoResult {
  * Returns:
  * - Full ASCII logo for width >= 70
  * - Small ASCII logo for width >= 40
- * - Text variant "CODEBUFF" or "Codebuff CLI" for narrow widths
+ * - Text variant "CODEZERO" or "Codezero CLI" for narrow widths
  *
  * The hook handles ALL formatting internally including:
  * - Line parsing and width limiting
@@ -64,12 +64,12 @@ export const useLogo = ({
   const rawLogoString = useMemo(() => {
     if (availableWidth >= 70) return LOGO
     if (availableWidth >= 20) return LOGO_SMALL
-    return 'CODEBUFF'
+    return 'CODEZERO'
   }, [availableWidth])
 
   // Format text block for plain text contexts (chat messages, etc.)
   const textBlock = useMemo(() => {
-    if (rawLogoString === 'CODEBUFF') {
+    if (rawLogoString === 'CODEZERO') {
       return '' // Don't show ASCII art for text-only variant in plain text contexts
     }
     // Parse and format for plain text display
@@ -81,9 +81,9 @@ export const useLogo = ({
   // Format component for React contexts (login modal, etc.)
   const component = useMemo(() => {
     // Text-only variant for very narrow widths
-    if (rawLogoString === 'CODEBUFF') {
-      // Show shorter "Codebuff" for very narrow widths (< 30), otherwise "Codebuff CLI"
-      const displayText = availableWidth < 30 ? 'Codebuff' : 'Codebuff CLI'
+    if (rawLogoString === 'CODEZERO') {
+      // Show shorter "Codezero" for very narrow widths (< 30), otherwise "Codezero CLI"
+      const displayText = availableWidth < 30 ? 'Codezero' : 'Codezero CLI'
 
       return (
         <text style={{ wrapMode: 'none' }}>
