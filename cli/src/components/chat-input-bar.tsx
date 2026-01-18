@@ -183,7 +183,15 @@ export const ChatInputBar = ({
   }
 
   // Handle input changes with special mode entry detection
-  const handleInputChange = (value: InputValue) => {
+  const handleInputChange = (
+    value: InputValue | ((prev: InputValue) => InputValue),
+  ) => {
+    // For functional updates (used by IME input), pass through directly
+    if (typeof value === 'function') {
+      setInputValue(value)
+      return
+    }
+
     // Detect entering bash mode: user typed exactly '!' when in default mode
     if (inputMode === 'default' && value.text === '!') {
       // Enter bash mode and clear input

@@ -155,7 +155,7 @@ function isAltModifier(key: KeyEvent): boolean {
 
 interface MultilineInputProps {
   value: string
-  onChange: (value: InputValue) => void
+  onChange: (value: InputValue | ((prev: InputValue) => InputValue)) => void
   onSubmit: () => void
   onKeyIntercept?: (key: KeyEvent) => boolean
   onPaste: (fallbackText?: string) => void

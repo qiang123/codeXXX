@@ -246,7 +246,14 @@ export const ChatHistoryScreen: React.FC<ChatHistoryScreenProps> = ({
         >
           <MultilineInput
             value={searchQuery}
-            onChange={({ text }) => setSearchQuery(text)}
+            onChange={(value) => {
+              if (typeof value === 'function') {
+                const current = { text: searchQuery, cursorPosition: searchQuery.length, lastEditDueToNav: false }
+                setSearchQuery(value(current).text)
+              } else {
+                setSearchQuery(value.text)
+              }
+            }}
             onSubmit={() => {}}
             onPaste={() => {}}
             onKeyIntercept={handleKeyIntercept}

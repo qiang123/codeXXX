@@ -217,7 +217,13 @@ export const AccordionQuestion: React.FC<AccordionQuestionProps> = ({
                 value={answer?.otherText || ''}
                 cursorPosition={otherCursorPosition}
                 onChange={(inputValue) => {
-                  onSetOtherText(inputValue.text, inputValue.cursorPosition)
+                  if (typeof inputValue === 'function') {
+                    const current = { text: answer?.otherText || '', cursorPosition: otherCursorPosition, lastEditDueToNav: false }
+                    const newValue = inputValue(current)
+                    onSetOtherText(newValue.text, newValue.cursorPosition)
+                  } else {
+                    onSetOtherText(inputValue.text, inputValue.cursorPosition)
+                  }
                 }}
                 onSubmit={onOtherSubmit}
                 onPaste={(text) => {

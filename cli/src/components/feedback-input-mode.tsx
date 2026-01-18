@@ -100,9 +100,16 @@ const FeedbackTextSection: React.FC<FeedbackTextSectionProps> = ({
       <box style={{ paddingTop: 0, paddingBottom: 0 }}>
         <MultilineInput
           value={value}
-          onChange={({ text, cursorPosition }) => {
-            onChange(text)
-            onCursorChange(cursorPosition)
+          onChange={(inputValue) => {
+            if (typeof inputValue === 'function') {
+              const current = { text: value, cursorPosition: cursor, lastEditDueToNav: false }
+              const newValue = inputValue(current)
+              onChange(newValue.text)
+              onCursorChange(newValue.cursorPosition)
+            } else {
+              onChange(inputValue.text)
+              onCursorChange(inputValue.cursorPosition)
+            }
           }}
           onSubmit={onSubmit}
           onKeyIntercept={(key) => {

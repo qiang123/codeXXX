@@ -356,7 +356,14 @@ export const PublishContainer: React.FC<PublishContainerProps> = ({
           <box style={{ paddingTop: 0, paddingBottom: 0 }}>
             <MultilineInput
               value={searchQuery}
-              onChange={({ text }) => setSearchQuery(text)}
+              onChange={(value) => {
+                if (typeof value === 'function') {
+                  const current = { text: searchQuery, cursorPosition: searchQuery.length, lastEditDueToNav: false }
+                  setSearchQuery(value(current).text)
+                } else {
+                  setSearchQuery(value.text)
+                }
+              }}
               onSubmit={handleNext}
               onPaste={() => {}}
               onKeyIntercept={handleSearchKeyIntercept}

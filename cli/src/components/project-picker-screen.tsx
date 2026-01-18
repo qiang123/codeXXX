@@ -353,7 +353,14 @@ export const ProjectPickerScreen: React.FC<ProjectPickerScreenProps> = ({
         >
           <MultilineInput
             value={searchQuery}
-            onChange={({ text }) => setSearchQuery(text)}
+            onChange={(value) => {
+              if (typeof value === 'function') {
+                const current = { text: searchQuery, cursorPosition: searchQuery.length, lastEditDueToNav: false }
+                setSearchQuery(value(current).text)
+              } else {
+                setSearchQuery(value.text)
+              }
+            }}
             onSubmit={() => {}} // Enter key handled by onKeyIntercept
             onPaste={() => {}} // Paste not needed for path input
             onKeyIntercept={handleSearchKeyIntercept}
