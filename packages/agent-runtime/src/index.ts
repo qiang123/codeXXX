@@ -2,12 +2,13 @@
  * Agent Runtime Package
  *
  * Modular architecture for agent execution:
- * - core/     - Agent execution loop and step handling
- * - stream/   - Stream parsing and processing
- * - tools/    - Tool handlers and execution
+ * - core/      - Agent execution loop and step handling
+ * - stream/    - Stream parsing and processing
+ * - file-ops/  - File operations (rewrite, replace, diff)
+ * - tools/     - Tool handlers and execution
  * - templates/ - Agent template management
- * - llm-api/  - LLM API integrations
- * - util/     - Utility functions
+ * - llm-api/   - LLM API integrations
+ * - util/      - Utility functions
  */
 
 // Core execution
@@ -15,6 +16,9 @@ export * from './core'
 
 // Stream processing
 export * from './stream'
+
+// File operations
+export * from './file-ops'
 
 // Main entry points (legacy exports for backward compatibility)
 export { mainPrompt, callMainPrompt } from './main-prompt'
@@ -50,19 +54,13 @@ export type { System, TextBlock } from './llm-api/claude'
 // MCP
 export { getMCPToolData } from './mcp'
 
-// File operations
-export { fastRewrite, rewriteWithOpenAI, shouldAddFilePlaceholders } from './fast-rewrite'
-export { processFileBlock, handleLargeFile } from './process-file-block'
-export { processStrReplace } from './process-str-replace'
+// File reading updates (not in file-ops module)
 export { getFileReadingUpdates } from './get-file-reading-updates'
 
 // Find files
 export { requestRelevantFiles, requestRelevantFilesForTraining } from './find-files/request-files-prompt'
 export { CustomFilePickerConfigSchema } from './find-files/custom-file-picker-config'
 export type { CustomFilePickerConfig } from './find-files/custom-file-picker-config'
-
-// Diff generation
-export { parseAndGetDiffBlocksSingleFile, tryToDoStringReplacementWithExtraIndentation, retryDiffBlocksPrompt } from './generate-diffs-prompt'
 
 // Constants
 export { globalStopSequence } from './constants'
