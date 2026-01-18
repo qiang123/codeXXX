@@ -89,16 +89,27 @@ const TAB_WIDTH = 4
  */
 function isPrintableCharacterKey(key: KeyEvent): boolean {
   const name = key.name
-  
+  const sequence = key.sequence
+
+  // If we have a sequence but no name, this is likely multi-byte input (Chinese, Japanese, Korean, etc.)
+  // This happens when OpenTUI's parseKeypress doesn't properly handle multi-byte UTF-8 characters
+  if (!name && sequence && sequence.length > 0) {
+    // Additional check: make sure this isn't a control sequence
+    // Control sequences usually start with ESC (\x1B) or have special patterns
+    if (!sequence.startsWith('\x1B') && !CONTROL_CHAR_REGEX.test(sequence)) {
+      return true
+    }
+  }
+
   // No name = likely multi-byte input (Chinese, Japanese, Korean, etc.) - treat as printable
   if (!name) return true
-  
+
   // Single character name = regular ASCII printable (a, b, 1, $, etc.)
   if (name.length === 1) return true
-  
+
   // Special case: space key has name 'space' but is printable
   if (name === 'space') return true
-  
+
   // Multi-char name = special key (up, f1, backspace, etc.)
   return false
 }
@@ -188,6 +199,51 @@ export const MultilineInput = forwardRef<
   const [lastActivity, setLastActivity] = useState(Date.now())
 
   const stickyColumnRef = useRef<number | null>(null)
+
+  // IME composition state for handling multi-byte input
+  const imeStateRef = useRef<{
+    isComposing: boolean
+    compositionBuffer: string
+    lastInputTime: number
+    compositionTimer: ReturnType<typeof setTimeout> | null
+  }>({
+    isComposing: false,
+    compositionBuffer: '',
+    lastInputTime: 0,
+    compositionTimer: null,
+  })
+
+  // Clear IME composition state
+  const clearIMEComposition = useCallback(() => {
+    const state = imeStateRef.current
+    if (state.compositionTimer) {
+      clearTimeout(state.compositionTimer)
+      state.compositionTimer = null
+    }
+    state.isComposing = false
+    state.compositionBuffer = ''
+    state.lastInputTime = 0
+  }, [])
+
+  // Commit IME composition buffer
+  const commitIMEComposition = useCallback(() => {
+    const state = imeStateRef.current
+    if (state.compositionBuffer.length > 0) {
+      logger.debug('MultilineInput: Committing IME composition', {
+        buffer: state.compositionBuffer,
+        length: state.compositionBuffer.length,
+      })
+      // Use functional update to get the latest state
+      onChange((prev) => ({
+        text: prev.text.slice(0, prev.cursorPosition) + state.compositionBuffer + prev.text.slice(prev.cursorPosition),
+        cursorPosition: prev.cursorPosition + state.compositionBuffer.length,
+        lastEditDueToNav: false,
+      }))
+      clearIMEComposition()
+      return true
+    }
+    return false
+  }, [clearIMEComposition, onChange])
 
   // Helper to get or set the sticky column for vertical navigation.
   // When stickyColumnRef.current is set, we return it (preserving column across
@@ -315,45 +371,47 @@ export const MultilineInput = forwardRef<
       // Check if there's a selection to replace
       const selection = getSelectionRange()
       if (selection) {
-        // Replace selected text with the new text
-        const newValue =
-          value.slice(0, selection.start) +
-          textToInsert +
-          value.slice(selection.end)
         clearSelection()
-        onChange({
-          text: newValue,
+        // Use functional update to get the latest state
+        onChange((prev) => ({
+          text:
+            prev.text.slice(0, selection.start) +
+            textToInsert +
+            prev.text.slice(selection.end),
           cursorPosition: selection.start + textToInsert.length,
           lastEditDueToNav: false,
-        })
+        }))
         return
       }
 
       // No selection, insert at cursor
-      const newValue =
-        value.slice(0, cursorPosition) +
-        textToInsert +
-        value.slice(cursorPosition)
-      onChange({
-        text: newValue,
-        cursorPosition: cursorPosition + textToInsert.length,
+      // Use functional update to get the latest state
+      onChange((prev) => ({
+        text:
+          prev.text.slice(0, prev.cursorPosition) +
+          textToInsert +
+          prev.text.slice(prev.cursorPosition),
+        cursorPosition: prev.cursorPosition + textToInsert.length,
         lastEditDueToNav: false,
-      })
+      }))
     },
-    [cursorPosition, onChange, value, getSelectionRange, clearSelection],
+    [onChange, getSelectionRange, clearSelection],
   )
 
   const moveCursor = useCallback(
     (nextPosition: number) => {
-      const clamped = Math.max(0, Math.min(value.length, nextPosition))
-      if (clamped === cursorPosition) return
-      onChange({
-        text: value,
-        cursorPosition: clamped,
-        lastEditDueToNav: false,
+      // Use functional update to get the latest state
+      onChange((prev) => {
+        const clamped = Math.max(0, Math.min(prev.text.length, nextPosition))
+        if (clamped === prev.cursorPosition) return prev
+        return {
+          text: prev.text,
+          cursorPosition: clamped,
+          lastEditDueToNav: false,
+        }
       })
     },
-    [cursorPosition, onChange, value],
+    [onChange],
   )
 
   // Handle mouse clicks to position cursor
@@ -929,6 +987,32 @@ export const MultilineInput = forwardRef<
   // Handle character input (regular chars, tab, and IME/multi-byte input)
   const handleCharacterInput = useCallback(
     (key: KeyEvent): boolean => {
+      const now = Date.now()
+      const imeState = imeStateRef.current
+
+      // Debug logging for all character input (including potential multi-byte bytes)
+      if (key.sequence && key.sequence.length >= 1) {
+        const chars = Array.from(key.sequence)
+        const charCodes = chars.map(c => c.charCodeAt(0))
+        const isPotentialMultiByte = chars.some(c => c.charCodeAt(0) > 127)
+
+        logger.debug('MultilineInput: Character input detected', {
+          sequence: key.sequence,
+          sequenceLength: key.sequence.length,
+          name: key.name,
+          nameLength: key.name?.length,
+          isPrintable: isPrintableCharacterKey(key),
+          chars: chars.map(c => `${c} (U+${c.charCodeAt(0).toString(16).padStart(4, '0')})`),
+          charCodes,
+          isPotentialMultiByte,
+          imeState: {
+            isComposing: imeState.isComposing,
+            bufferLength: imeState.compositionBuffer.length,
+            lastInputTime: imeState.lastInputTime,
+          },
+        })
+      }
+
       // Tab: let higher-level keyboard handlers (like chat keyboard shortcuts) handle it
       if (
         key.name === 'tab' &&
@@ -940,6 +1024,51 @@ export const MultilineInput = forwardRef<
       ) {
         // Don't insert a literal tab character here; allow global keyboard handlers to process it
         return false
+      }
+
+      // Check if this looks like IME composition input
+      // IME composition typically produces multi-byte characters with no name
+      const looksLikeIMEInput =
+        key.sequence &&
+        key.sequence.length > 1 &&
+        !key.name &&
+        !key.ctrl &&
+        !key.meta &&
+        !key.option
+
+      if (looksLikeIMEInput) {
+        // Start or continue IME composition
+        if (!imeState.isComposing) {
+          logger.debug('MultilineInput: Starting IME composition')
+          imeState.isComposing = true
+        }
+
+        // Cancel any pending timer
+        if (imeState.compositionTimer) {
+          clearTimeout(imeState.compositionTimer)
+          imeState.compositionTimer = null
+        }
+
+        // Add to composition buffer
+        imeState.compositionBuffer += key.sequence
+        imeState.lastInputTime = now
+
+        // Set timer to commit composition after a short delay
+        // This allows for rapid IME input while ensuring eventual commit
+        imeState.compositionTimer = setTimeout(() => {
+          logger.debug('MultilineInput: Timer expired, committing IME composition')
+          commitIMEComposition()
+        }, 100) // 100ms delay
+
+        preventKeyDefault(key)
+        return true
+      }
+
+      // If we have a pending IME composition and get a regular character,
+      // commit the IME composition first
+      if (imeState.isComposing && imeState.compositionBuffer.length > 0) {
+        logger.debug('MultilineInput: Committing IME composition before regular input')
+        commitIMEComposition()
       }
 
       // Character input (including multi-byte characters from IME like Chinese, Japanese, Korean)
@@ -954,13 +1083,17 @@ export const MultilineInput = forwardRef<
         isPrintableCharacterKey(key)
       ) {
         preventKeyDefault(key)
+        logger.debug('MultilineInput: Inserting text', {
+          text: key.sequence,
+          length: key.sequence.length,
+        })
         insertTextAtCursor(key.sequence)
         return true
       }
 
       return false
     },
-    [insertTextAtCursor],
+    [insertTextAtCursor, commitIMEComposition],
   )
 
   // Main keyboard handler - delegates to specialized handlers

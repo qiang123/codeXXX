@@ -13,23 +13,34 @@ import { describe, test, expect } from 'bun:test'
 /**
  * Check if a key event represents printable character input (not a special key).
  * This mirrors the function in multiline-input.tsx for testing.
- * 
+ *
  * Uses a positive heuristic based on key.name length rather than a brittle deny-list.
  * Special keys have descriptive multi-character names (like 'backspace', 'up', 'f1')
  * while regular printable characters either have no name or a single-character name.
  */
-function isPrintableCharacterKey(key: { name?: string }): boolean {
+function isPrintableCharacterKey(key: { name?: string; sequence?: string }): boolean {
   const name = key.name
-  
-  // No name = likely multi-byte input (Chinese, Japanese, Korean, etc.)
+  const sequence = key.sequence
+
+  // If we have a sequence but no name, this is likely multi-byte input (Chinese, Japanese, Korean, etc.)
+  // This happens when OpenTUI's parseKeypress doesn't properly handle multi-byte UTF-8 characters
+  if (!name && sequence && sequence.length > 0) {
+    // Additional check: make sure this isn't a control sequence
+    // Control sequences usually start with ESC (\x1B) or have special patterns
+    if (!sequence.startsWith('\x1B') && !CONTROL_CHAR_REGEX.test(sequence)) {
+      return true
+    }
+  }
+
+  // No name = likely multi-byte input (Chinese, Japanese, Korean, etc.) - treat as printable
   if (!name) return true
-  
+
   // Single character name = regular ASCII printable (a, b, 1, $, etc.)
   if (name.length === 1) return true
-  
+
   // Special case: space key has name 'space' but is printable
   if (name === 'space') return true
-  
+
   // Multi-char name = special key (up, f1, backspace, etc.)
   return false
 }
