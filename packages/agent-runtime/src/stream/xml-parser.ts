@@ -1,9 +1,14 @@
 /**
- * XML stream parsing utilities
+ * XML stream parser - re-exports from util/stream-xml-parser
  */
 
 export {
   createStreamParserState,
   parseStreamChunk,
-  type StreamParserState,
+} from '../util/stream-xml-parser'
+
+export type {
+  StreamParserState,
+  ParsedToolCall,
+  ParseResult,
 } from '../util/stream-xml-parser'

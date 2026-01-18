@@ -1,5 +1,5 @@
 /**
- * Tool stream parsing - processes LLM output stream for tool calls
+ * Tool stream parser - processes LLM streams with tool call handling
  */
 
 export { processStreamWithTools } from '../tool-stream-parser'

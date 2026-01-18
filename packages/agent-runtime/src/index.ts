@@ -3,15 +3,18 @@
  *
  * Modular architecture for agent execution:
  * - core/     - Agent execution loop and step handling
- * - prompt/   - Prompt building and formatting
  * - stream/   - Stream parsing and processing
  * - tools/    - Tool handlers and execution
  * - templates/ - Agent template management
- * - llm/      - LLM API integrations
+ * - llm-api/  - LLM API integrations
+ * - util/     - Utility functions
  */
 
 // Core execution
 export * from './core'
+
+// Stream processing
+export * from './stream'
 
 // Main entry points (legacy exports for backward compatibility)
 export { mainPrompt, callMainPrompt } from './main-prompt'

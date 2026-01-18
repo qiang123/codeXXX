@@ -1,5 +1,5 @@
 /**
- * Stream processing - converts stream to tool executions
+ * Main stream processor - orchestrates stream processing with tool execution
  */
 
 export { processStream } from '../tools/stream-parser'
